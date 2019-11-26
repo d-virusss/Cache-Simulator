@@ -36,13 +36,9 @@ enum cache_simulator_constants {
 	CB_DIRTY = 1,	/* Cache block is dirty */
 
 	BYTES_PER_WORD = 4,	/* This is 32 bit machine (1 word is 4 bytes) */
+	MAX_NR_WORDS_PER_BLOCK = 32,	/* Maximum cache block size */
 };
 
-/* By default, each cache block has 4-words in size. It's safe to assume
- * NR_WORDS_PER_BLOCK is always the power of 2 */
-#ifndef NR_WORDS_PER_BLOCK
-#define NR_WORDS_PER_BLOCK 4
-#endif
 
 typedef unsigned char bool;
 #define true  1
@@ -55,7 +51,11 @@ static unsigned char memory[8 << 10] = {
 	0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
 	0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
 	'h',  'e',  'l',  'l',  'o',  ' ' , 'w' , 'o',
-	'r',  'l',  'd',  '!',  0x00,
+	'r',  'l',  'd',  '!',  0x89, 0xab, 0xcd, 0xef,
+	0x50, 0x52, 0x54, 0x56, 0x58, 0x5a, 0x5c, 0x5e,
+	0x60, 0x62, 0x64, 0x66, 0x68, 0x6a, 0x6c, 0x6e,
+	0x70, 0x72, 0x74, 0x76, 0x78, 0x7a, 0x7c, 0x7e,
+	0x80, 0x82, 0x84, 0x86, 0x88, 0x8a, 0x8c, 0x8e,
 };
 
 /* Cache block */
@@ -66,12 +66,15 @@ struct cache_block {
 							   Use CB_CLEAN or CB_DIRTY macro above */
 	unsigned int tag;		/* Tag */
 	unsigned int timestamp;	/* Timestamp or clock cycles to implement LRU */
-	unsigned char data[BYTES_PER_WORD * NR_WORDS_PER_BLOCK];
+	unsigned char data[BYTES_PER_WORD * MAX_NR_WORDS_PER_BLOCK];
 							/* Each block holds 4 words */
 };
 
 /* An 1-D array for cache blocks. */
 static struct cache_block *cache = NULL;
+
+/* The size of cache block. The value is set during the initialization */
+static int nr_words_per_block = 4;
 
 /* Number of cache blocks. The value is set during the initialization */
 static int nr_blocks = 16;
@@ -202,7 +205,7 @@ static void __show_cache(void)
 				cache[i].valid == CB_VALID ? 'v' : ' ',
 				cache[i].dirty == CB_DIRTY ? 'd' : ' ',
 				cache[i].tag, cache[i].timestamp);
-		for (int j = 0; j < BYTES_PER_WORD * NR_WORDS_PER_BLOCK; j++) {
+		for (int j = 0; j < BYTES_PER_WORD * nr_words_per_block; j++) {
 			fprintf(stderr, "%02x", cache[i].data[j]);
 			if ((j + 1) % 4 == 0) fprintf(stderr, " ");
 		}
@@ -370,10 +373,12 @@ int main(int argc, const char *argv[])
 	}
 
 #ifndef _USE_DEFAULT
+	if (input == stdin) printf("- words per block:  ");
+	fscanf(input, "%d", &nr_words_per_block);
 	if (input == stdin) printf("- number of blocks: ");
-	scanf("%d", &nr_blocks);
-	if (input == stdin) printf("- number of ways: ");
-	scanf("%d", &nr_ways);
+	fscanf(input, "%d", &nr_blocks);
+	if (input == stdin) printf("- number of ways:   ");
+	fscanf(input, "%d", &nr_ways);
 
 	nr_sets = nr_blocks / nr_ways;
 #endif
