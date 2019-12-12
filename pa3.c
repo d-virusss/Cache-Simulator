@@ -165,14 +165,36 @@ int load_word(unsigned int addr)
 	int addr_index;
 	int addr_set;
 
-	addr_index = (addr / (nr_words_per_block * 4)) % nr_blocks;
-	addr_set = (addr_index / nr_ways);
 
-	for (int i = 0; i < 4; i++)
+	addr_index = (addr / (nr_words_per_block * 4)) % nr_blocks; // 받은 주소에 해당하는 block 넘버 계산
+	addr_set = (addr_index % nr_sets); // 받은 주소에 해당하는 set 넘버 계산
+
+	int count = 0; // word 수 카운트
+
+	for (int i = addr_set; i < addr_set + nr_ways; i++) // set에서 맨 처음 block부터 돌면서 check
 	{
-		cache[addr_index].data[words[addr_index]] = memory[addr];
+		if (cache[addr_set].valid == CB_INVALID) // block이 invalid 였을 때
+		{
+			cache[addr_set].timestamp = cycles;
+			cycles += cycles_miss;
+			cache[addr_set].valid = CB_VALID;
+			cache[addr_set].tag = addr >> (bit_offset + bit_index);
+			for (int j = addr; j < addr + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+			{
+				cache[addr_set].data[count++] = memory[j];
+				if (count == nr_words_per_block * 4)
+				{
+					count = 0;
+				}
+			}
+			break;
+		}
+		else
+		{
+			cycles += cycles_hit;
+			addr_set++;
 
-
+		}
 	}
 
 
