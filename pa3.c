@@ -15,6 +15,8 @@
 
  // 2019.12.12 02:00 지금부터 과제 시작합니다 ^^
  // 2019.12.12 23:00 과제 이해중
+// ㅁㄴㅇㄹ
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -155,6 +157,23 @@ static int log2_discrete(int n)
 int load_word(unsigned int addr)
 {
 	/* TODO: Implement your load_word function */
+	int bit_tag, bit_index, bit_offset;
+	bit_offset = log2_discrete(nr_words_per_block);
+	bit_index = log2_discrete(nr_blocks);
+	bit_tag = 32 - bit_index - bit_offset;
+
+	int addr_index;
+	int addr_set;
+
+	addr_index = (addr / (nr_words_per_block * 4)) % nr_blocks;
+	addr_set = (addr_index / nr_ways);
+
+	for (int i = 0; i < 4; i++)
+	{
+		cache[addr_index].data[words[addr_index]] = memory[addr];
+
+
+	}
 
 
 	return CACHE_MISS;
