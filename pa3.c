@@ -98,6 +98,8 @@ const int cycles_miss = 100;
 /* Clock cycles so far */
 static unsigned int cycles = 0;
 
+#define MAX_INTEGER 100000000;
+
 
 /**
  * strmatch()
@@ -170,6 +172,9 @@ int load_word(unsigned int addr)
 	addr_index = (addr / (nr_words_per_block * 4)) % nr_blocks; // 받은 주소에 해당하는 block 넘버 계산
 	addr_set = (addr_index % nr_sets); // 받은 주소에 해당하는 set 넘버 계산
 	start_word = (addr / 16) * 16;
+	int old_block_timestamp = MAX_INTEGER;
+	int old_block_addr = 0;
+
 
 	int count = 0; // word 수 카운트
 
@@ -183,15 +188,36 @@ int load_word(unsigned int addr)
 			for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 			{
 				cache[i].data[count++] = memory[j];
-				if (count == nr_words_per_block * 4)
-				{
-					count = 0;
-				}
 			}
 			break;
 		}
-		else
+		else if (cache[i].valid == CB_VALID && cache[i].dirty == CB_CLEAN) // data 들어있을 때
 		{
+			for (int k = addr_set * nr_ways; k < (addr_set * nr_ways) + nr_ways; k++)
+			{
+				if (cache[k].tag == (addr >> (bit_offset + bit_index)))
+				{
+					for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+					{
+						cache[old_block_addr].data[count++] = memory[j];
+					}
+					return CACHE_HIT;
+				}
+			}
+			if (cache[i].timestamp < old_block_timestamp)
+			{
+				old_block_timestamp = cache[i].timestamp;
+				old_block_addr = i;
+			}
+			if (i == ((addr_set * nr_ways) + nr_ways - 1) && cache[i].valid == CB_VALID)
+			{
+				cache[old_block_addr].timestamp = cycles;
+				cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
+				for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+				{
+					cache[old_block_addr].data[count++] = memory[j];
+				}
+			}
 			continue;
 		}
 	}
