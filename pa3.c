@@ -195,11 +195,14 @@ int load_word(unsigned int addr)
 		{
 			for (int k = addr_set * nr_ways; k < (addr_set * nr_ways) + nr_ways; k++)
 			{
+				//printf("k값 : %d, cache[k].tag 값 : %d \n", k, cache[k].tag);
 				if (cache[k].tag == (addr >> (bit_offset + bit_index)))
 				{
+					printf("k값 : %d, cache[k].tag 값 : %d \n", k, cache[k].tag);
+					cache[k].timestamp = cycles;
 					for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 					{
-						cache[old_block_addr].data[count++] = memory[j];
+						cache[k].data[count++] = memory[j];
 					}
 					return CACHE_HIT;
 				}
