@@ -158,30 +158,31 @@ int load_word(unsigned int addr)
 {
 	/* TODO: Implement your load_word function */
 	int bit_tag, bit_index, bit_offset;
-	bit_offset = log2_discrete(nr_words_per_block);
-	bit_index = log2_discrete(nr_blocks);
+	bit_offset = log2_discrete(nr_words_per_block * 4);
+	bit_index = log2_discrete(nr_sets);
 	bit_tag = 32 - bit_index - bit_offset;
 
 	int addr_index;
 	int addr_set;
+	int start_word;
 
 
 	addr_index = (addr / (nr_words_per_block * 4)) % nr_blocks; // 받은 주소에 해당하는 block 넘버 계산
 	addr_set = (addr_index % nr_sets); // 받은 주소에 해당하는 set 넘버 계산
+	start_word = (addr / 16) * 16;
 
 	int count = 0; // word 수 카운트
 
-	for (int i = addr_set; i < addr_set + nr_ways; i++) // set에서 맨 처음 block부터 돌면서 check
+	for (int i = (addr_set * nr_ways); i < (addr_set * nr_ways) + nr_ways; i++) // set에서 맨 처음 block부터 돌면서 check
 	{
-		if (cache[addr_set].valid == CB_INVALID) // block이 invalid 였을 때
+		if (cache[i].valid == CB_INVALID) // block이 invalid 였을 때
 		{
-			cache[addr_set].timestamp = cycles;
-			cycles += cycles_miss;
-			cache[addr_set].valid = CB_VALID;
-			cache[addr_set].tag = addr >> (bit_offset + bit_index);
-			for (int j = addr; j < addr + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+			cache[i].timestamp = cycles;
+			cache[i].valid = CB_VALID;
+			cache[i].tag = addr >> (bit_offset + bit_index);
+			for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 			{
-				cache[addr_set].data[count++] = memory[j];
+				cache[i].data[count++] = memory[j];
 				if (count == nr_words_per_block * 4)
 				{
 					count = 0;
@@ -191,9 +192,7 @@ int load_word(unsigned int addr)
 		}
 		else
 		{
-			cycles += cycles_hit;
-			addr_set++;
-
+			continue;
 		}
 	}
 
