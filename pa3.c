@@ -98,6 +98,8 @@ const int cycles_miss = 100;
 /* Clock cycles so far */
 static unsigned int cycles = 0;
 
+int now_index = 0;
+
 #define MAX_INTEGER 100000000;
 
 
@@ -180,6 +182,12 @@ int load_word(unsigned int addr)
 
 	for (int i = (addr_set * nr_ways); i < (addr_set * nr_ways) + nr_ways; i++) // set에서 맨 처음 block부터 돌면서 check
 	{
+
+		if (cache[i].timestamp < old_block_timestamp)
+		{
+			old_block_timestamp = cache[i].timestamp;
+			old_block_addr = i;
+		}
 		if (cache[i].valid == CB_INVALID) // block이 invalid 였을 때
 		{
 			cache[i].timestamp = cycles;
@@ -189,38 +197,85 @@ int load_word(unsigned int addr)
 			{
 				cache[i].data[count++] = memory[j];
 			}
+			now_index = i;
 			break;
 		}
-		else if (cache[i].valid == CB_VALID && cache[i].dirty == CB_CLEAN) // data 들어있을 때
+		else if (cache[i].valid == CB_VALID) // data 들어있을 때
 		{
-			for (int k = addr_set * nr_ways; k < (addr_set * nr_ways) + nr_ways; k++)
+			/*for (int k = addr_set * nr_ways; k < (addr_set * nr_ways) + nr_ways; k++)
+			{*/
+			//printf("k값 : %d, cache[k].tag 값 : %d \n", k, cache[k].tag);
+			if (cache[i].tag == (addr >> (bit_offset + bit_index))) // tag 같으면 cache_hit남
 			{
-				//printf("k값 : %d, cache[k].tag 값 : %d \n", k, cache[k].tag);
-				if (cache[k].tag == (addr >> (bit_offset + bit_index)))
+				if (cache[i].dirty == CB_CLEAN)
 				{
-					printf("k값 : %d, cache[k].tag 값 : %d \n", k, cache[k].tag);
-					cache[k].timestamp = cycles;
-					for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
-					{
-						cache[k].data[count++] = memory[j];
-					}
+					cache[i].timestamp = cycles;
+					printf("cache hit 났어요 \n");
+					now_index = i;
 					return CACHE_HIT;
 				}
-			}
-			if (cache[i].timestamp < old_block_timestamp)
-			{
-				old_block_timestamp = cache[i].timestamp;
-				old_block_addr = i;
-			}
-			if (i == ((addr_set * nr_ways) + nr_ways - 1) && cache[i].valid == CB_VALID)
-			{
-				cache[old_block_addr].timestamp = cycles;
-				cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
-				for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+				else if (cache[i].dirty == CB_DIRTY)
 				{
-					cache[old_block_addr].data[count++] = memory[j];
+					printf("여기로 오는게 맞음 cache hit 났어요 \n");
+					printf("%d \n", CACHE_MISS);
+					cache[i].timestamp = cycles;
+					for (int j = (((cache[i].tag << (bit_offset + bit_index)) / 16) * 16); j < start_word + (nr_words_per_block * 4); j++)
+					{
+						memory[j] = cache[i].data[count++];
+					}
+					for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+					{
+						cache[i].data[count++] = memory[j];
+					}
+					printf("CACHE_HIT 바로전 \n");
+					now_index = i;
+					printf("lw에서 now_index 값 : %d \n", now_index);
+					return CACHE_HIT;
 				}
+				//printf("k값 : %d, cache[k].tag 값 : %d \n", k, cache[k].tag);
+				cache[i].timestamp = cycles;
+				/*for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+				{
+					cache[i].data[count++] = memory[j];
+				}*/
+				return CACHE_HIT;
 			}
+			else // tag가 다를때
+			{
+				if (i == ((addr_set * nr_ways) + nr_ways - 1)) // 다 차있을때
+				{
+					if (cache[old_block_addr].dirty == CB_CLEAN)
+					{
+						cache[old_block_addr].timestamp = cycles;
+						cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
+						for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+						{
+							cache[old_block_addr].data[count++] = memory[j];
+						}
+					}
+					else // old_block이 더티일 때
+					{
+						/*for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+						{
+							cache[i].data[count++] = memory[j];
+						}*/
+						for (int j = (((cache[old_block_addr].tag << (bit_offset + bit_index)) / 16) * 16); j < start_word + (nr_words_per_block * 4); j++)
+						{
+							memory[j] = cache[old_block_addr].data[count++];
+						} // memory에 써줌
+						cache[old_block_addr].timestamp = cycles;
+						cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
+						for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+						{
+							cache[old_block_addr].data[count++] = memory[j];
+						}
+					}
+				}
+				now_index = i;
+				continue;
+			}
+			//}
+
 			continue;
 		}
 	}
@@ -249,8 +304,64 @@ int load_word(unsigned int addr)
 int store_word(unsigned int addr, unsigned int data)
 {
 	/* TODO: Implement your store_word function */
+	int bit_tag, bit_index, bit_offset;
+	bit_offset = log2_discrete(nr_words_per_block * 4);
+	bit_index = log2_discrete(nr_sets);
+	bit_tag = 32 - bit_index - bit_offset;
 
-	return CACHE_MISS;
+	int addr_index;
+	int addr_set;
+	int start_word;
+
+	int count = 0;
+	int lw_hit;
+	addr_set = (((addr / (nr_words_per_block * 4)) % nr_blocks) % nr_sets); // 받은 주소에 해당하는 set 넘버 계산
+	start_word = (addr / 16) * 16;
+
+	for (int i = (addr_set * nr_ways); i < (addr_set * nr_ways) + nr_ways; i++) // set에서 맨 처음 block부터 돌면서 check
+	{
+		if (cache[i].valid == CB_INVALID)
+		{
+			printf("A\n");
+			lw_hit = load_word(addr);
+			for (int j = 3; j >= 0; j--) // cache.data에 memory에 있는 data 입력
+			{
+				cache[i].data[addr++] = data >> 8 * j;
+			}
+			cache[i].dirty = CB_DIRTY;
+			break;
+		}
+		else if (cache[i].valid == CB_VALID && cache[i].dirty == CB_CLEAN)
+		{
+			printf("B\n");
+			lw_hit = load_word(addr);
+			cache[i].dirty = CB_DIRTY;
+			break;
+
+		}
+		else if (cache[i].valid == CB_VALID && cache[i].dirty == CB_DIRTY)
+		{
+			printf("C\n");
+
+			lw_hit = load_word(addr);
+			printf("현재 i값 : %d\n", i);
+			int start_word_addr;
+			start_word_addr = addr % 16;
+			for (int j = 3; j >= 0; j--) // cache.data에 parameter로 받은 data 입력
+			{
+				cache[now_index].data[start_word_addr++] = data >> 8 * j;
+			}
+			cache[now_index].dirty = CB_DIRTY;
+			printf("현재 i값 : %d\n", i);
+			printf("now_index값 : %d \n", now_index);
+			break;
+		}
+
+	}
+	if (lw_hit == CACHE_HIT)
+		return CACHE_HIT;
+	else
+		return CACHE_MISS;
 }
 
 
