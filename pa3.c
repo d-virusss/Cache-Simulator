@@ -218,11 +218,12 @@ int load_word(unsigned int addr)
 				{
 					printf("태그 같고 DIRTY 일때\n");
 					cache[i].timestamp = cycles;
-					cache[i].dirty = CB_CLEAN;
-					for (int j = (((cache[i].tag << (bit_offset + bit_index)) / 16) * 16); j < start_word + (nr_words_per_block * 4); j++)
+					for (int j = (((cache[i].tag << (bit_offset + bit_index)) / 16) * 16); j < (((cache[i].tag << (bit_offset + bit_index)) / 16) * 16) + (nr_words_per_block * 4); j++)
 					{
+						printf("%d ", j);
 						memory[j] = cache[i].data[count++];
-					}
+					} // memory에 써줘야함
+					cache[i].dirty = CB_CLEAN;
 					count = 0;
 					for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 					{
@@ -320,16 +321,23 @@ int store_word(unsigned int addr, unsigned int data)
 	int addr_index;
 	int addr_set;
 	int start_word;
+	int old_block_timestamp = MAX_INTEGER;
+	int old_block_addr = 0;
 
 	int count = 0;
 	int lw_hit;
 	int start_word_addr;
-	start_word_addr = addr % 16;
+	start_word_addr = addr % 16; // data만 1word 덮어씌울 때 사용
 	addr_set = (((addr / (nr_words_per_block * 4)) % nr_blocks) % nr_sets); // 받은 주소에 해당하는 set 넘버 계산
-	start_word = (addr / 16) * 16;
+	start_word = (addr / 16) * 16; // 받은 주소의 메모리 범위 지정
 
 	for (int i = (addr_set * nr_ways); i < (addr_set * nr_ways) + nr_ways; i++) // set에서 맨 처음 block부터 돌면서 check
 	{
+		if (cache[i].timestamp < old_block_timestamp)
+		{
+			old_block_timestamp = cache[i].timestamp;
+			old_block_addr = i;
+		}
 		if (cache[i].valid == CB_INVALID)
 		{
 			printf("swA\n");
@@ -342,7 +350,33 @@ int store_word(unsigned int addr, unsigned int data)
 			cache[i].dirty = CB_DIRTY;
 			break;
 		}
-		else if (cache[i].valid == CB_VALID && cache[i].dirty == CB_CLEAN)
+		else if (cache[i].valid == CB_VALID)
+		{
+			if (cache[i].tag == (addr >> (bit_offset + bit_index)))
+			{
+				cache[i].timestamp = cycles;
+				cache[i].dirty = CB_DIRTY;
+				for (int j = 3; j >= 0; j--) // cache.data에 memory에 있는 data 입력
+				{
+					cache[i].data[start_word_addr++] = data >> 8 * j;
+				}
+				return CACHE_HIT;
+			}
+			else // tag가 다를 때
+			{
+				if (i == ((addr_set * nr_ways) + nr_ways - 1)) // set 꽉 찼을 때
+				{
+					cache[old_block_addr].timestamp = cycles;
+					cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
+					for (int j = 3; j >= 0; j--) // cache.data에 memory에 있는 data 입력
+					{
+						cache[i].data[start_word_addr++] = data >> 8 * j;
+					}
+					return CACHE_MISS;
+				}
+			}
+		}
+		/*else if (cache[i].valid == CB_VALID && cache[i].dirty == CB_CLEAN)
 		{
 			printf("swB\n");
 			lw_hit = load_word(addr);
@@ -369,7 +403,7 @@ int store_word(unsigned int addr, unsigned int data)
 			printf("현재 i값 : %d\n", i);
 			printf("now_index값 : %d \n", now_index);
 			break;
-		}
+		}*/
 
 	}
 	if (lw_hit == CACHE_HIT)
