@@ -218,9 +218,12 @@ int load_word(unsigned int addr)
 				{
 					printf("태그 같고 DIRTY 일때\n");
 					cache[i].timestamp = cycles;
-					for (int j = (((cache[i].tag << (bit_offset + bit_index)) / 16) * 16); j < (((cache[i].tag << (bit_offset + bit_index)) / 16) * 16) + (nr_words_per_block * 4); j++)
+					for (int j = ((addr_set * nr_words_per_block * nr_blocks)
+						+ ((cache[i].tag << (bit_offset + bit_index)) / 16) * 16);
+						j < ((addr_set * nr_words_per_block * nr_blocks)
+							+ ((cache[i].tag << (bit_offset + bit_index)) / 16) * 16)
+						+ (nr_words_per_block * 4); j++)
 					{
-						printf("%d ", j);
 						memory[j] = cache[i].data[count++];
 					} // memory에 써줘야함
 					cache[i].dirty = CB_CLEAN;
@@ -263,6 +266,14 @@ int load_word(unsigned int addr)
 						cache[old_block_addr].dirty = CB_CLEAN;
 						cache[old_block_addr].timestamp = cycles;
 						cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
+						/*for (int j = ((addr_set * nr_words_per_block * nr_blocks)
+							+((cache[i].tag << (bit_offset + bit_index)) / 16) * 16);
+							j < ((addr_set * nr_words_per_block * nr_blocks)
+								+((cache[i].tag << (bit_offset + bit_index)) / 16) * 16)
+							+ (nr_words_per_block * 4); j++)
+						{
+							memory[j] = cache[i].data[count++];
+						}*/
 						/*for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 						{
 							cache[i].data[count++] = memory[j];
@@ -352,7 +363,7 @@ int store_word(unsigned int addr, unsigned int data)
 		}
 		else if (cache[i].valid == CB_VALID)
 		{
-			if (cache[i].tag == (addr >> (bit_offset + bit_index)))
+			if (cache[i].tag == (addr >> (bit_offset + bit_index))) // tag 같을 때
 			{
 				cache[i].timestamp = cycles;
 				cache[i].dirty = CB_DIRTY;
@@ -366,11 +377,28 @@ int store_word(unsigned int addr, unsigned int data)
 			{
 				if (i == ((addr_set * nr_ways) + nr_ways - 1)) // set 꽉 찼을 때
 				{
+					if (cache[old_block_addr].dirty == CB_DIRTY)
+					{
+						printf("tag다르고 dirty일 때 ㅎㅎ \n");
+						for (int j = ((addr_set * nr_words_per_block * nr_blocks)
+							+ ((cache[old_block_addr].tag << (bit_offset + bit_index)) / 16) * 16);
+							j < ((addr_set * nr_words_per_block * nr_blocks)
+								+ ((cache[old_block_addr].tag << (bit_offset + bit_index)) / 16) * 16)
+							+ (nr_words_per_block * 4); j++)
+						{
+							memory[j] = cache[old_block_addr].data[count++];
+						}
+					}
 					cache[old_block_addr].timestamp = cycles;
 					cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
+					count = 0;
+					for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+					{
+						cache[old_block_addr].data[count++] = memory[j];
+					}
 					for (int j = 3; j >= 0; j--) // cache.data에 memory에 있는 data 입력
 					{
-						cache[i].data[start_word_addr++] = data >> 8 * j;
+						cache[old_block_addr].data[start_word_addr++] = data >> 8 * j;
 					}
 					return CACHE_MISS;
 				}
