@@ -209,27 +209,26 @@ int load_word(unsigned int addr)
 			{
 				if (cache[i].dirty == CB_CLEAN)
 				{
+					printf("태그 같고 CLEAN 일때\n");
 					cache[i].timestamp = cycles;
-					printf("cache hit 났어요 \n");
 					now_index = i;
 					return CACHE_HIT;
 				}
 				else if (cache[i].dirty == CB_DIRTY)
 				{
-					printf("여기로 오는게 맞음 cache hit 났어요 \n");
-					printf("%d \n", CACHE_MISS);
+					printf("태그 같고 DIRTY 일때\n");
 					cache[i].timestamp = cycles;
+					cache[i].dirty = CB_CLEAN;
 					for (int j = (((cache[i].tag << (bit_offset + bit_index)) / 16) * 16); j < start_word + (nr_words_per_block * 4); j++)
 					{
 						memory[j] = cache[i].data[count++];
 					}
+					count = 0;
 					for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 					{
 						cache[i].data[count++] = memory[j];
 					}
-					printf("CACHE_HIT 바로전 \n");
 					now_index = i;
-					printf("lw에서 now_index 값 : %d \n", now_index);
 					return CACHE_HIT;
 				}
 				//printf("k값 : %d, cache[k].tag 값 : %d \n", k, cache[k].tag);
@@ -246,6 +245,8 @@ int load_word(unsigned int addr)
 				{
 					if (cache[old_block_addr].dirty == CB_CLEAN)
 					{
+						printf("태그 다르고 CLEAN 일때\n");
+						cache[old_block_addr].dirty = CB_CLEAN;
 						cache[old_block_addr].timestamp = cycles;
 						cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
 						for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
@@ -255,16 +256,23 @@ int load_word(unsigned int addr)
 					}
 					else // old_block이 더티일 때
 					{
+						printf("태그 다르고 DIRTY 일때\n");
+						printf("현재 i 값은 : %d\n", i);
+						printf("현재 old_block_addr 값은 : %d\n", old_block_addr);
+						cache[old_block_addr].dirty = CB_CLEAN;
+						cache[old_block_addr].timestamp = cycles;
+						cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
 						/*for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 						{
 							cache[i].data[count++] = memory[j];
 						}*/
-						for (int j = (((cache[old_block_addr].tag << (bit_offset + bit_index)) / 16) * 16); j < start_word + (nr_words_per_block * 4); j++)
+						/*for (int j = (((cache[old_block_addr].tag << (bit_offset + bit_index)) / 16) * 16); j < start_word + (nr_words_per_block * 4); j++)
 						{
+							printf("%d ", j);
+							printf("%d ", count);
 							memory[j] = cache[old_block_addr].data[count++];
-						} // memory에 써줌
-						cache[old_block_addr].timestamp = cycles;
-						cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
+						} // write - back , cache에 있는 data를 memory로 옮김*/
+						count = 0;
 						for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 						{
 							cache[old_block_addr].data[count++] = memory[j];
@@ -315,6 +323,8 @@ int store_word(unsigned int addr, unsigned int data)
 
 	int count = 0;
 	int lw_hit;
+	int start_word_addr;
+	start_word_addr = addr % 16;
 	addr_set = (((addr / (nr_words_per_block * 4)) % nr_blocks) % nr_sets); // 받은 주소에 해당하는 set 넘버 계산
 	start_word = (addr / 16) * 16;
 
@@ -322,31 +332,35 @@ int store_word(unsigned int addr, unsigned int data)
 	{
 		if (cache[i].valid == CB_INVALID)
 		{
-			printf("A\n");
+			printf("swA\n");
 			lw_hit = load_word(addr);
+			printf("11now_index는 %d \n", now_index);
 			for (int j = 3; j >= 0; j--) // cache.data에 memory에 있는 data 입력
 			{
-				cache[i].data[addr++] = data >> 8 * j;
+				cache[i].data[start_word_addr++] = data >> 8 * j;
 			}
 			cache[i].dirty = CB_DIRTY;
 			break;
 		}
 		else if (cache[i].valid == CB_VALID && cache[i].dirty == CB_CLEAN)
 		{
-			printf("B\n");
+			printf("swB\n");
 			lw_hit = load_word(addr);
-			cache[i].dirty = CB_DIRTY;
+			printf("22now_index는 %d \n", now_index);
+			for (int j = 3; j >= 0; j--) // cache.data에 memory에 있는 data 입력
+			{
+				cache[now_index].data[start_word_addr++] = data >> 8 * j;
+			}
+			cache[now_index].dirty = CB_DIRTY;
 			break;
 
 		}
 		else if (cache[i].valid == CB_VALID && cache[i].dirty == CB_DIRTY)
 		{
-			printf("C\n");
+			printf("swC\n");
 
 			lw_hit = load_word(addr);
 			printf("현재 i값 : %d\n", i);
-			int start_word_addr;
-			start_word_addr = addr % 16;
 			for (int j = 3; j >= 0; j--) // cache.data에 parameter로 받은 data 입력
 			{
 				cache[now_index].data[start_word_addr++] = data >> 8 * j;
