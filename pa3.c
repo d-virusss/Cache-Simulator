@@ -173,7 +173,7 @@ int load_word(unsigned int addr)
 
 	addr_index = (addr / (nr_words_per_block * 4)) % nr_blocks; // 받은 주소에 해당하는 block 넘버 계산
 	addr_set = (addr_index % nr_sets); // 받은 주소에 해당하는 set 넘버 계산
-	start_word = (addr / 16) * 16;
+	start_word = (addr / (nr_words_per_block * 4)) * (nr_words_per_block * 4);
 	int old_block_timestamp = MAX_INTEGER;
 	int old_block_addr = 0;
 
@@ -193,6 +193,8 @@ int load_word(unsigned int addr)
 			cache[i].timestamp = cycles;
 			cache[i].valid = CB_VALID;
 			cache[i].tag = addr >> (bit_offset + bit_index);
+			/*printf("현재 i값은 : %d\n", i);
+			printf("현재 start_word값은 : %d\n", start_word);*/
 			for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 			{
 				cache[i].data[count++] = memory[j];
@@ -209,29 +211,29 @@ int load_word(unsigned int addr)
 			{
 				if (cache[i].dirty == CB_CLEAN)
 				{
-					printf("태그 같고 CLEAN 일때\n");
+					//printf("태그 같고 CLEAN 일때\n");
 					cache[i].timestamp = cycles;
 					now_index = i;
 					return CACHE_HIT;
 				}
 				else if (cache[i].dirty == CB_DIRTY)
 				{
-					printf("태그 같고 DIRTY 일때\n");
+					//printf("태그 같고 DIRTY 일때\n");
 					cache[i].timestamp = cycles;
-					for (int j = ((addr_set * nr_words_per_block * nr_blocks)
-						+ ((cache[i].tag << (bit_offset + bit_index)) / 16) * 16);
+					/*for (int j = ((addr_set * nr_words_per_block * nr_blocks)
+						+((cache[i].tag << (bit_offset + bit_index)) / 16) * 16);
 						j < ((addr_set * nr_words_per_block * nr_blocks)
-							+ ((cache[i].tag << (bit_offset + bit_index)) / 16) * 16)
+							+((cache[i].tag << (bit_offset + bit_index)) / 16) * 16)
 						+ (nr_words_per_block * 4); j++)
 					{
 						memory[j] = cache[i].data[count++];
 					} // memory에 써줘야함
 					cache[i].dirty = CB_CLEAN;
-					count = 0;
-					for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
+					count = 0;*/
+					/*for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
 					{
 						cache[i].data[count++] = memory[j];
-					}
+					}*/
 					now_index = i;
 					return CACHE_HIT;
 				}
@@ -249,8 +251,8 @@ int load_word(unsigned int addr)
 				{
 					if (cache[old_block_addr].dirty == CB_CLEAN)
 					{
-						printf("태그 다르고 CLEAN 일때\n");
-						cache[old_block_addr].dirty = CB_CLEAN;
+						//printf("태그 다르고 CLEAN 일때\n");
+						//cache[old_block_addr].dirty = CB_CLEAN;
 						cache[old_block_addr].timestamp = cycles;
 						cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
 						for (int j = start_word; j < start_word + (nr_words_per_block * 4); j++) // cache.data에 memory에 있는 data 입력
@@ -260,9 +262,27 @@ int load_word(unsigned int addr)
 					}
 					else // old_block이 더티일 때
 					{
-						printf("태그 다르고 DIRTY 일때\n");
-						printf("현재 i 값은 : %d\n", i);
+						/*printf("태그 다르고 DIRTY 일때\n");
 						printf("현재 old_block_addr 값은 : %d\n", old_block_addr);
+						printf("현재 메모리를 가리키는 j 값은 : %08x\n",
+							((cache[old_block_addr].tag << (bit_offset + bit_index)) + (addr_set << bit_offset)));*/
+						for (int j = ((cache[old_block_addr].tag << (bit_offset + bit_index)) + (addr_set << bit_offset));
+							j < ((cache[old_block_addr].tag << (bit_offset + bit_index)) + (addr_set << bit_offset))
+							+ (nr_words_per_block * 4); j++)
+						{
+							memory[j] = cache[old_block_addr].data[count++];
+						}
+						/*or (int j = ((addr_set * nr_words_per_block * nr_blocks)
+							+ ((cache[old_block_addr].tag << (bit_offset + bit_index) + ) / (4 * nr_words_per_block))
+							* (4 * nr_words_per_block));
+							j < ((addr_set * nr_words_per_block * nr_blocks)
+								+ ((cache[old_block_addr].tag << (bit_offset + bit_index)) / (4 * nr_words_per_block))
+								* (4 * nr_words_per_block))
+							+ (nr_words_per_block * 4); j++)
+						{
+							memory[j] = cache[old_block_addr].data[count++];
+						} // memory에 써줘야함*/
+						//cache[i].dirty = CB_CLEAN;
 						cache[old_block_addr].dirty = CB_CLEAN;
 						cache[old_block_addr].timestamp = cycles;
 						cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
@@ -338,7 +358,7 @@ int store_word(unsigned int addr, unsigned int data)
 	int count = 0;
 	int lw_hit;
 	int start_word_addr;
-	start_word_addr = addr % 16; // data만 1word 덮어씌울 때 사용
+	start_word_addr = addr % (nr_words_per_block * 4); // data만 1word 덮어씌울 때 사용
 	addr_set = (((addr / (nr_words_per_block * 4)) % nr_blocks) % nr_sets); // 받은 주소에 해당하는 set 넘버 계산
 	start_word = (addr / 16) * 16; // 받은 주소의 메모리 범위 지정
 
@@ -351,9 +371,8 @@ int store_word(unsigned int addr, unsigned int data)
 		}
 		if (cache[i].valid == CB_INVALID)
 		{
-			printf("swA\n");
+			//printf("SW_INVALID 일 때\n");
 			lw_hit = load_word(addr);
-			printf("11now_index는 %d \n", now_index);
 			for (int j = 3; j >= 0; j--) // cache.data에 memory에 있는 data 입력
 			{
 				cache[i].data[start_word_addr++] = data >> 8 * j;
@@ -365,6 +384,7 @@ int store_word(unsigned int addr, unsigned int data)
 		{
 			if (cache[i].tag == (addr >> (bit_offset + bit_index))) // tag 같을 때
 			{
+				//printf("SW_VALID이고 _ tag 같고 dirty일 때 \n");
 				cache[i].timestamp = cycles;
 				cache[i].dirty = CB_DIRTY;
 				for (int j = 3; j >= 0; j--) // cache.data에 memory에 있는 data 입력
@@ -375,20 +395,30 @@ int store_word(unsigned int addr, unsigned int data)
 			}
 			else // tag가 다를 때
 			{
+
 				if (i == ((addr_set * nr_ways) + nr_ways - 1)) // set 꽉 찼을 때
 				{
 					if (cache[old_block_addr].dirty == CB_DIRTY)
 					{
-						printf("tag다르고 dirty일 때 ㅎㅎ \n");
-						for (int j = ((addr_set * nr_words_per_block * nr_blocks)
-							+ ((cache[old_block_addr].tag << (bit_offset + bit_index)) / 16) * 16);
-							j < ((addr_set * nr_words_per_block * nr_blocks)
-								+ ((cache[old_block_addr].tag << (bit_offset + bit_index)) / 16) * 16)
+						//printf("SW_VALID이고 _ tag다르고 dirty일 때 ㅎㅎ \n");
+						for (int j = ((cache[old_block_addr].tag << (bit_offset + bit_index)) + (addr_set << bit_offset));
+							j < ((cache[old_block_addr].tag << (bit_offset + bit_index)) + (addr_set << bit_offset))
 							+ (nr_words_per_block * 4); j++)
 						{
 							memory[j] = cache[old_block_addr].data[count++];
 						}
+						/*for (int j = ((addr_set * nr_words_per_block * nr_blocks)
+							+ ((cache[old_block_addr].tag << (bit_offset + bit_index)) / (4 * nr_words_per_block))
+							* (4 * nr_words_per_block));
+							j < ((addr_set * nr_words_per_block * nr_blocks)
+								+ ((cache[old_block_addr].tag << (bit_offset + bit_index)) / (4 * nr_words_per_block))
+								* (4 * nr_words_per_block))
+							+ (nr_words_per_block * 4); j++)
+						{
+							memory[j] = cache[old_block_addr].data[count++];
+						}*/
 					}
+					cache[old_block_addr].dirty = CB_DIRTY;
 					cache[old_block_addr].timestamp = cycles;
 					cache[old_block_addr].tag = addr >> (bit_offset + bit_index);
 					count = 0;
